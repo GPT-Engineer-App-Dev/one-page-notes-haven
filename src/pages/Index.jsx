@@ -35,7 +35,8 @@ const Index = () => {
     localStorage.setItem('notes', JSON.stringify(notes));
   }, [notes]);
 
-  const login = () => {
+  const login = (e) => {
+    e.preventDefault();
     if (username === 'user' && password === 'pass') {
       setIsLoggedIn(true);
       setLoginError('');
@@ -126,7 +127,7 @@ const Index = () => {
             <h2 className="text-2xl font-bold text-center">Login</h2>
           </CardHeader>
           <CardContent>
-            <form onSubmit={(e) => { e.preventDefault(); login(); }} className="space-y-4">
+            <form onSubmit={login} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="username">Username</Label>
                 <Input
