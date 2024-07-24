@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { AlertCircle, Edit, Trash2, Plus, Tag, MessageSquare } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 const Index = () => {
   const [notes, setNotes] = useState([]);
@@ -15,6 +16,7 @@ const Index = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   useEffect(() => {
     const storedNotes = JSON.parse(localStorage.getItem('notes')) || [];
@@ -52,6 +54,7 @@ const Index = () => {
     };
     setNotes([...notes, newNote]);
     setCurrentNote(newNote);
+    setIsDialogOpen(true);
   };
 
   const updateNote = (updatedNote) => {
@@ -62,6 +65,7 @@ const Index = () => {
   const deleteNote = (id) => {
     setNotes(notes.filter(note => note.id !== id));
     setCurrentNote(null);
+    setIsDialogOpen(false);
   };
 
   const addComment = (noteId, comment) => {
@@ -138,7 +142,7 @@ const Index = () => {
         <div className="space-y-4">
           <Button onClick={addNote} className="w-full"><Plus className="mr-2" /> Add Note</Button>
           {notes.map(note => (
-            <Card key={note.id} className="cursor-pointer" onClick={() => setCurrentNote(note)} style={{ backgroundColor: note.color }}>
+            <Card key={note.id} className="cursor-pointer" onClick={() => { setCurrentNote(note); setIsDialogOpen(true); }} style={{ backgroundColor: note.color }}>
               <CardHeader>
                 <h3 className="font-semibold">{note.title}</h3>
               </CardHeader>
@@ -154,100 +158,98 @@ const Index = () => {
           ))}
         </div>
         <div className="md:col-span-2">
-          {currentNote ? (
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <Input
-                  value={currentNote.title}
-                  onChange={(e) => updateNote({ ...currentNote, title: e.target.value })}
-                  className="text-xl font-bold"
-                />
-                <div className="space-x-2">
-                  <Button onClick={() => deleteNote(currentNote.id)} variant="destructive">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Textarea
-                  value={currentNote.content}
-                  onChange={(e) => updateNote({ ...currentNote, content: e.target.value })}
-                  rows={10}
-                />
-                <div className="flex items-center space-x-2">
-                  <Label htmlFor="color">Color:</Label>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogContent className="max-w-3xl">
+              <DialogHeader>
+                <DialogTitle>Edit Note</DialogTitle>
+              </DialogHeader>
+              {currentNote && (
+                <div className="space-y-4">
                   <Input
-                    id="color"
-                    type="color"
-                    value={currentNote.color}
-                    onChange={(e) => updateNote({ ...currentNote, color: e.target.value })}
-                    className="w-12 h-8"
+                    value={currentNote.title}
+                    onChange={(e) => updateNote({ ...currentNote, title: e.target.value })}
+                    className="text-xl font-bold"
                   />
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Label htmlFor="tags">Tags:</Label>
-                  <Input
-                    id="tags"
-                    placeholder="Add tags (comma-separated)"
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter') {
-                        const newTags = e.target.value.split(',').map(tag => tag.trim());
-                        updateNote({ ...currentNote, tags: [...new Set([...currentNote.tags, ...newTags])] });
-                        e.target.value = '';
-                      }
-                    }}
+                  <Textarea
+                    value={currentNote.content}
+                    onChange={(e) => updateNote({ ...currentNote, content: e.target.value })}
+                    rows={10}
                   />
-                </div>
-                <div className="flex flex-wrap">
-                  {currentNote.tags.map(tag => (
-                    <span key={tag} className="bg-gray-200 rounded-full px-2 py-1 text-sm mr-1 mb-1">
-                      {tag}
-                      <button
-                        onClick={() => updateNote({ ...currentNote, tags: currentNote.tags.filter(t => t !== tag) })}
-                        className="ml-1 text-red-500"
-                      >
-                        &times;
-                      </button>
-                    </span>
-                  ))}
-                </div>
-                <div className="space-y-2">
-                  <h4 className="font-semibold">Comments</h4>
-                  {currentNote.comments.map(comment => (
-                    <div key={comment.id} className="bg-gray-100 p-2 rounded">
-                      {comment.text}
-                    </div>
-                  ))}
                   <div className="flex items-center space-x-2">
+                    <Label htmlFor="color">Color:</Label>
                     <Input
-                      placeholder="Add a comment"
+                      id="color"
+                      type="color"
+                      value={currentNote.color}
+                      onChange={(e) => updateNote({ ...currentNote, color: e.target.value })}
+                      className="w-12 h-8"
+                    />
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Label htmlFor="tags">Tags:</Label>
+                    <Input
+                      id="tags"
+                      placeholder="Add tags (comma-separated)"
                       onKeyPress={(e) => {
-                        if (e.key === 'Enter' && e.target.value.trim()) {
-                          addComment(currentNote.id, e.target.value.trim());
+                        if (e.key === 'Enter') {
+                          const newTags = e.target.value.split(',').map(tag => tag.trim());
+                          updateNote({ ...currentNote, tags: [...new Set([...currentNote.tags, ...newTags])] });
                           e.target.value = '';
                         }
                       }}
                     />
-                    <Button onClick={() => {
-                      const input = document.querySelector('input[placeholder="Add a comment"]');
-                      if (input.value.trim()) {
-                        addComment(currentNote.id, input.value.trim());
-                        input.value = '';
-                      }
-                    }}>
-                      <MessageSquare className="h-4 w-4" />
+                  </div>
+                  <div className="flex flex-wrap">
+                    {currentNote.tags.map(tag => (
+                      <span key={tag} className="bg-gray-200 rounded-full px-2 py-1 text-sm mr-1 mb-1">
+                        {tag}
+                        <button
+                          onClick={() => updateNote({ ...currentNote, tags: currentNote.tags.filter(t => t !== tag) })}
+                          className="ml-1 text-red-500"
+                        >
+                          &times;
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="space-y-2">
+                    <h4 className="font-semibold">Comments</h4>
+                    {currentNote.comments.map(comment => (
+                      <div key={comment.id} className="bg-gray-100 p-2 rounded">
+                        {comment.text}
+                      </div>
+                    ))}
+                    <div className="flex items-center space-x-2">
+                      <Input
+                        placeholder="Add a comment"
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter' && e.target.value.trim()) {
+                            addComment(currentNote.id, e.target.value.trim());
+                            e.target.value = '';
+                          }
+                        }}
+                      />
+                      <Button onClick={() => {
+                        const input = document.querySelector('input[placeholder="Add a comment"]');
+                        if (input.value.trim()) {
+                          addComment(currentNote.id, input.value.trim());
+                          input.value = '';
+                        }
+                      }}>
+                        <MessageSquare className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="flex justify-end space-x-2">
+                    <Button onClick={() => setIsDialogOpen(false)}>Close</Button>
+                    <Button onClick={() => deleteNote(currentNote.id)} variant="destructive">
+                      <Trash2 className="h-4 w-4 mr-2" /> Delete Note
                     </Button>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card>
-              <CardContent>
-                <p className="text-center text-gray-500 my-8">Select a note or create a new one</p>
-              </CardContent>
-            </Card>
-          )}
+              )}
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
       <Card className="mt-8">
