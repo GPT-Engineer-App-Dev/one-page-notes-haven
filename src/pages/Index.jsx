@@ -1,13 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { AlertCircle, Edit, Trash2, Plus, Tag, MessageSquare } from 'lucide-react';
+import { AlertCircle, Edit, Trash2, Plus, Tag, MessageSquare, Grid, Layout } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
 
 const Index = () => {
   const [notes, setNotes] = useState([]);
@@ -17,10 +18,17 @@ const Index = () => {
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isCanvasMode, setIsCanvasMode] = useState(false);
+  const [draggedNote, setDraggedNote] = useState(null);
+  const canvasRef = useRef(null);
 
   useEffect(() => {
     const storedNotes = JSON.parse(localStorage.getItem('notes')) || [];
-    setNotes(storedNotes);
+    setNotes(storedNotes.map(note => ({
+      ...note,
+      x: note.x || Math.random() * (window.innerWidth - 200),
+      y: note.y || Math.random() * (window.innerHeight - 200)
+    })));
   }, []);
 
   useEffect(() => {
@@ -51,6 +59,8 @@ const Index = () => {
       tags: [],
       comments: [],
       createdAt: new Date().toISOString(),
+      x: Math.random() * (window.innerWidth - 200),
+      y: Math.random() * (window.innerHeight - 200),
     };
     setNotes([...notes, newNote]);
     setCurrentNote(newNote);
@@ -86,6 +96,26 @@ const Index = () => {
       counts[date] = (counts[date] || 0) + 1;
     });
     return Object.entries(counts).map(([date, count]) => ({ date, count }));
+  };
+
+  const handleDragStart = (e, note) => {
+    setDraggedNote(note);
+    e.dataTransfer.setData('text/plain', ''); // Required for Firefox
+  };
+
+  const handleDrag = (e) => {
+    if (draggedNote && canvasRef.current) {
+      const rect = canvasRef.current.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      setNotes(notes.map(note => 
+        note.id === draggedNote.id ? { ...note, x, y } : note
+      ));
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDraggedNote(null);
   };
 
   if (!isLoggedIn) {
@@ -136,11 +166,51 @@ const Index = () => {
     <div className="container mx-auto p-4">
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold">Notes App</h1>
-        <Button onClick={logout}>Logout</Button>
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2">
+            <Label htmlFor="canvas-mode">Canvas Mode</Label>
+            <Switch
+              id="canvas-mode"
+              checked={isCanvasMode}
+              onCheckedChange={setIsCanvasMode}
+            />
+          </div>
+          <Button onClick={logout}>Logout</Button>
+        </div>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="space-y-4">
-          <Button onClick={addNote} className="w-full"><Plus className="mr-2" /> Add Note</Button>
+      <Button onClick={addNote} className="mb-4"><Plus className="mr-2" /> Add Note</Button>
+      {isCanvasMode ? (
+        <div 
+          ref={canvasRef}
+          className="border border-gray-300 rounded-lg h-[600px] relative overflow-hidden"
+          onDragOver={(e) => e.preventDefault()}
+        >
+          {notes.map(note => (
+            <div
+              key={note.id}
+              draggable
+              onDragStart={(e) => handleDragStart(e, note)}
+              onDrag={handleDrag}
+              onDragEnd={handleDragEnd}
+              onClick={() => { setCurrentNote(note); setIsDialogOpen(true); }}
+              className="absolute cursor-move"
+              style={{
+                left: `${note.x}px`,
+                top: `${note.y}px`,
+                backgroundColor: note.color,
+                width: '200px',
+                padding: '10px',
+                borderRadius: '5px',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24)'
+              }}
+            >
+              <h3 className="font-semibold truncate">{note.title}</h3>
+              <p className="truncate">{note.content}</p>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {notes.map(note => (
             <Card key={note.id} className="cursor-pointer" onClick={() => { setCurrentNote(note); setIsDialogOpen(true); }} style={{ backgroundColor: note.color }}>
               <CardHeader>
@@ -157,101 +227,99 @@ const Index = () => {
             </Card>
           ))}
         </div>
-        <div className="md:col-span-2">
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogContent className="max-w-3xl">
-              <DialogHeader>
-                <DialogTitle>Edit Note</DialogTitle>
-              </DialogHeader>
-              {currentNote && (
-                <div className="space-y-4">
+      )}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Edit Note</DialogTitle>
+          </DialogHeader>
+          {currentNote && (
+            <div className="space-y-4">
+              <Input
+                value={currentNote.title}
+                onChange={(e) => updateNote({ ...currentNote, title: e.target.value })}
+                className="text-xl font-bold"
+              />
+              <Textarea
+                value={currentNote.content}
+                onChange={(e) => updateNote({ ...currentNote, content: e.target.value })}
+                rows={10}
+              />
+              <div className="flex items-center space-x-2">
+                <Label htmlFor="color">Color:</Label>
+                <Input
+                  id="color"
+                  type="color"
+                  value={currentNote.color}
+                  onChange={(e) => updateNote({ ...currentNote, color: e.target.value })}
+                  className="w-12 h-8"
+                />
+              </div>
+              <div className="flex items-center space-x-2">
+                <Label htmlFor="tags">Tags:</Label>
+                <Input
+                  id="tags"
+                  placeholder="Add tags (comma-separated)"
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      const newTags = e.target.value.split(',').map(tag => tag.trim());
+                      updateNote({ ...currentNote, tags: [...new Set([...currentNote.tags, ...newTags])] });
+                      e.target.value = '';
+                    }
+                  }}
+                />
+              </div>
+              <div className="flex flex-wrap">
+                {currentNote.tags.map(tag => (
+                  <span key={tag} className="bg-gray-200 rounded-full px-2 py-1 text-sm mr-1 mb-1">
+                    {tag}
+                    <button
+                      onClick={() => updateNote({ ...currentNote, tags: currentNote.tags.filter(t => t !== tag) })}
+                      className="ml-1 text-red-500"
+                    >
+                      &times;
+                    </button>
+                  </span>
+                ))}
+              </div>
+              <div className="space-y-2">
+                <h4 className="font-semibold">Comments</h4>
+                {currentNote.comments.map(comment => (
+                  <div key={comment.id} className="bg-gray-100 p-2 rounded">
+                    {comment.text}
+                  </div>
+                ))}
+                <div className="flex items-center space-x-2">
                   <Input
-                    value={currentNote.title}
-                    onChange={(e) => updateNote({ ...currentNote, title: e.target.value })}
-                    className="text-xl font-bold"
+                    placeholder="Add a comment"
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter' && e.target.value.trim()) {
+                        addComment(currentNote.id, e.target.value.trim());
+                        e.target.value = '';
+                      }
+                    }}
                   />
-                  <Textarea
-                    value={currentNote.content}
-                    onChange={(e) => updateNote({ ...currentNote, content: e.target.value })}
-                    rows={10}
-                  />
-                  <div className="flex items-center space-x-2">
-                    <Label htmlFor="color">Color:</Label>
-                    <Input
-                      id="color"
-                      type="color"
-                      value={currentNote.color}
-                      onChange={(e) => updateNote({ ...currentNote, color: e.target.value })}
-                      className="w-12 h-8"
-                    />
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Label htmlFor="tags">Tags:</Label>
-                    <Input
-                      id="tags"
-                      placeholder="Add tags (comma-separated)"
-                      onKeyPress={(e) => {
-                        if (e.key === 'Enter') {
-                          const newTags = e.target.value.split(',').map(tag => tag.trim());
-                          updateNote({ ...currentNote, tags: [...new Set([...currentNote.tags, ...newTags])] });
-                          e.target.value = '';
-                        }
-                      }}
-                    />
-                  </div>
-                  <div className="flex flex-wrap">
-                    {currentNote.tags.map(tag => (
-                      <span key={tag} className="bg-gray-200 rounded-full px-2 py-1 text-sm mr-1 mb-1">
-                        {tag}
-                        <button
-                          onClick={() => updateNote({ ...currentNote, tags: currentNote.tags.filter(t => t !== tag) })}
-                          className="ml-1 text-red-500"
-                        >
-                          &times;
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                  <div className="space-y-2">
-                    <h4 className="font-semibold">Comments</h4>
-                    {currentNote.comments.map(comment => (
-                      <div key={comment.id} className="bg-gray-100 p-2 rounded">
-                        {comment.text}
-                      </div>
-                    ))}
-                    <div className="flex items-center space-x-2">
-                      <Input
-                        placeholder="Add a comment"
-                        onKeyPress={(e) => {
-                          if (e.key === 'Enter' && e.target.value.trim()) {
-                            addComment(currentNote.id, e.target.value.trim());
-                            e.target.value = '';
-                          }
-                        }}
-                      />
-                      <Button onClick={() => {
-                        const input = document.querySelector('input[placeholder="Add a comment"]');
-                        if (input.value.trim()) {
-                          addComment(currentNote.id, input.value.trim());
-                          input.value = '';
-                        }
-                      }}>
-                        <MessageSquare className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="flex justify-end space-x-2">
-                    <Button onClick={() => setIsDialogOpen(false)}>Close</Button>
-                    <Button onClick={() => deleteNote(currentNote.id)} variant="destructive">
-                      <Trash2 className="h-4 w-4 mr-2" /> Delete Note
-                    </Button>
-                  </div>
+                  <Button onClick={() => {
+                    const input = document.querySelector('input[placeholder="Add a comment"]');
+                    if (input.value.trim()) {
+                      addComment(currentNote.id, input.value.trim());
+                      input.value = '';
+                    }
+                  }}>
+                    <MessageSquare className="h-4 w-4" />
+                  </Button>
                 </div>
-              )}
-            </DialogContent>
-          </Dialog>
-        </div>
-      </div>
+              </div>
+              <div className="flex justify-end space-x-2">
+                <Button onClick={() => setIsDialogOpen(false)}>Close</Button>
+                <Button onClick={() => deleteNote(currentNote.id)} variant="destructive">
+                  <Trash2 className="h-4 w-4 mr-2" /> Delete Note
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
       <Card className="mt-8">
         <CardHeader>
           <h2 className="text-xl font-bold">Notes Created Per Day</h2>
